@@ -25,15 +25,14 @@ void MotorController_set_target(MotorController *motor_controller, MotorState mo
 void MotorController_control_vel(MotorController *motor_controller) {
   double vel = motor_controller->tar_motor_state.value;
 
-  // 加速
-  if (vel > motor_controller->lst_motor_state.value) {
+  if (vel > motor_controller->cur_motor_state.value) { // 加速
     // 限制加速度
     double max_tar_vel =
-        motor_controller->lst_motor_state.value + motor_controller->max_acc / motor_controller->control_rate;
+        motor_controller->cur_motor_state.value + motor_controller->max_acc / motor_controller->control_rate;
     motor_controller->cur_motor_state.value = vel > max_tar_vel ? max_tar_vel : vel;
-  } else if (vel < motor_controller->lst_motor_state.value) {
+  } else if (vel < motor_controller->lst_motor_state.value) { // 减速
     double min_tar_vel =
-        motor_controller->lst_motor_state.value - motor_controller->max_acc / motor_controller->control_rate;
+        motor_controller->cur_motor_state.value - motor_controller->max_acc / motor_controller->control_rate;
     motor_controller->cur_motor_state.value = vel < min_tar_vel ? min_tar_vel : vel;
   }
 

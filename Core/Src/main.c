@@ -63,7 +63,6 @@ ComProtocolParser comProtocolParser;
 // 中断 flag
 bool motor_control_flag = false;
 bool tx_send_flag = false;
-bool rx_receive_flag = false;
 
 uint8_t rx_buffer[1];
 /* USER CODE END PV */
@@ -83,7 +82,7 @@ void init_all(void) {
 
   MotorDriver_init(&motorDriver, &pwmDriver, &gpioDriverEn, &gpioDriverDir);
 
-  MotorController_init(&motorController, &motorDriver, 100, 2);
+  MotorController_init(&motorController, &motorDriver, 10, 2);
 }
 /* USER CODE END 0 */
 
@@ -141,10 +140,10 @@ int main(void) {
       ComProtocolParser_parse(&comProtocolParser);
       if (comProtocolParser.motor_cmd_ready_flag == true) {
         comProtocolParser.motor_cmd_ready_flag = false;
-        MotorCmd motor_cmd = comProtocolParser.motor_cmd;
+        MotorCmdMsg motor_cmd = comProtocolParser.motor_cmd;
         MotorState motor_state;
         motor_state.mode = motor_cmd.mode;
-        motor_state.value = (double) motor_cmd.value / 1000;
+        motor_state.value = (double) motor_cmd.value / MOTOR_CMD_MSG_FLOAT_TO_INT;
         MotorController_set_target(&motorController, motor_state);
       }
     }
@@ -153,9 +152,11 @@ int main(void) {
     // 周期发送
     if (tx_send_flag == true) {
       tx_send_flag = false;
-//      printf("%d\n", parse_res);
-//      printf("%d\n", motorController.cur_motor_state.mode);
-//      printf("%f\n", motorController.cur_motor_state.value);
+
+      uint8_t buffer[MAX_PACKET_LENGTH + 7];
+      size_t it = 0;
+      protocol_dump(0, motorController.cur_motor_state, buffer, MAX_PACKET_LENGTH + 7, &it);
+      HAL_UART_Transmit_IT(&huart1, buffer, it);
     }
 
 
@@ -212,9 +213,10 @@ void SystemClock_Config(void) {
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
   // 电机周期控制
   if (htim == (&htim2)) {
+    printf("hi1\n");
     motor_control_flag = true;
     tx_send_flag = true;
-    rx_receive_flag = true;
+
   }
 }
 

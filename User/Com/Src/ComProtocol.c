@@ -10,7 +10,7 @@ void ComProtocolParser_input(ComProtocolParser *com_protocol_controller, uint8_t
 }
 
 int ComProtocolParser_parse(ComProtocolParser *com_protocol_controller) {
-  if (com_protocol_controller->deque.length < MAX_PACKET_LENGTH) return 1;
+  if (com_protocol_controller->deque.length < MIN_PACKET_LENGTH) return 1;
 
   uint8_t packet[MAX_PACKET_LENGTH];
 
@@ -71,7 +71,7 @@ int ComProtocolParser_parse(ComProtocolParser *com_protocol_controller) {
     case PACKET_MOTOR_CMD:
       return 100 + ComProtocolController_parse_motor_cmd(com_protocol_controller,
                                                          &packet[4],
-                                                         length - 4 - 2);
+                                                         length - 2 - 1 - 1 - 2);
       break;
     default:return -4;
       break;
@@ -81,10 +81,12 @@ int ComProtocolParser_parse(ComProtocolParser *com_protocol_controller) {
 int ComProtocolController_parse_motor_cmd(ComProtocolParser *com_protocol_controller,
                                           uint8_t data[],
                                           uint8_t length) {
-  if (length != 5) return -1;
+  // length err
+  if (length != MOTOR_CMD_MSG_LENGTH) return -1;
 
-  com_protocol_controller->motor_cmd.mode = data[0];
-  size_t it = 1;
+  size_t it = 0;
+  com_protocol_controller->motor_cmd.id = data[it++];
+  com_protocol_controller->motor_cmd.mode = data[it++];
   com_protocol_controller->motor_cmd.value = data_int8_to_int64(data, &it);
 
   // 通知获得消息
@@ -94,4 +96,29 @@ int ComProtocolController_parse_motor_cmd(ComProtocolParser *com_protocol_contro
 
 bool ComProtocolParser_have_receive(ComProtocolParser *com_protocol_controller) {
   return com_protocol_controller->deque.length > MIN_PACKET_LENGTH;
+}
+
+int protocol_dump(int id, MotorState motor_state, uint8_t buffer[], int length, size_t *it) {
+  const uint8_t packet_length = PACKET_BASE_LENGTH + MOTOR_STATE_MSG_LENGTH;
+  size_t start = *it;
+
+  // 缓冲区不足
+  if (start + packet_length > length) {
+    return -1;
+  }
+
+  buffer[(*it)++] = HD_NUM;
+  buffer[(*it)++] = ID_NUM;
+  buffer[(*it)++] = PACKET_BASE_LENGTH + MOTOR_STATE_MSG_LENGTH;
+  buffer[(*it)++] = PACKET_MOTOR_STATE;
+
+  buffer[(*it)++] = id;
+  buffer[(*it)++] = motor_state.mode;
+  data_int64_to_int8((int64_t) (motor_state.value * 1000), buffer, it);
+
+  uint16_t crc = CRC16_check(buffer, packet_length - 2);
+
+  data_int16_to_int8((int16_t) crc, buffer, it);
+
+  return 0;
 }

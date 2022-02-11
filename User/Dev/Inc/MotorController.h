@@ -31,7 +31,11 @@ typedef struct MotorController {
   MotorDriver *motor_driver;
 
   MotorState lst_motor_state;
+
+  // 认为cur_motor_state就是当前的状态，motor_driver设置后进瞬间达到
   MotorState cur_motor_state;
+
+  // 上位机给给的目标状态，可能需要几个控制周期后才能达到
   MotorState tar_motor_state;
 
   double max_acc;//转每秒方
