@@ -85,9 +85,9 @@ int ComProtocolController_parse_motor_cmd(ComProtocolParser *com_protocol_contro
   if (length != MOTOR_CMD_MSG_LENGTH) return -1;
 
   size_t it = 0;
-  com_protocol_controller->motor_cmd.id = data[it++];
-  com_protocol_controller->motor_cmd.mode = data[it++];
-  com_protocol_controller->motor_cmd.value = data_int8_to_int64(data, &it);
+  com_protocol_controller->motor_cmd_msg.id = data[it++];
+  com_protocol_controller->motor_cmd_msg.mode = data[it++];
+  com_protocol_controller->motor_cmd_msg.value = data_int8_to_int64(data, &it);
 
   // 通知获得消息
   com_protocol_controller->motor_cmd_ready_flag = true;
@@ -113,8 +113,9 @@ int protocol_dump(int id, MotorState motor_state, uint8_t buffer[], int length, 
   buffer[(*it)++] = PACKET_MOTOR_STATE;
 
   buffer[(*it)++] = id;
-  buffer[(*it)++] = motor_state.mode;
-  data_int64_to_int8((int64_t) (motor_state.value * 1000), buffer, it);
+  buffer[(*it)++] = 0;
+
+  data_int64_to_int8((int64_t) (motor_state.velocity * 1000), buffer, it);
 
   uint16_t crc = CRC16_check(buffer, packet_length - 2);
 

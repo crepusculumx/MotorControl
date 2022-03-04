@@ -54,7 +54,7 @@ typedef struct Packet {
 typedef struct ComProtocolParser {
   Deque deque;
 
-  MotorCmdMsg motor_cmd;
+  MotorCmdMsg motor_cmd_msg;
   bool motor_cmd_ready_flag;
 } ComProtocolParser;
 

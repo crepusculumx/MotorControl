@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "spi.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -32,6 +33,7 @@
 #include "MotorDriver.h"
 #include "MotorController.h"
 #include "ComProtocol.h"
+#include "As5048aDriver.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,10 +53,14 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+
 PwmDriver pwmDriver;
 GpioDriver gpioDriverEn;
 GpioDriver gpioDriverDir;
+GpioDriver gpioDriverSpiCs;
+
 MotorDriver motorDriver;
+As5048aDriver as5048aDriver;
 
 MotorController motorController;
 
@@ -63,8 +69,10 @@ ComProtocolParser comProtocolParser;
 // 中断 flag
 bool motor_control_flag = false;
 bool tx_send_flag = false;
+bool interrupt_flag_10Hz = false;
 
 uint8_t rx_buffer[1];
+uint8_t spi_buffer[2];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -79,8 +87,11 @@ void init_all(void) {
   PwmDriver_init(&pwmDriver, 64, &htim1, TIM_CHANNEL_1, 64, 65535);
   GpioDriver_init(&gpioDriverDir, MOTOR_0_DIR_GPIO_Port, MOTOR_0_DIR_Pin);
   GpioDriver_init(&gpioDriverEn, MOTOR_0_EN_GPIO_Port, MOTOR_0_EN_Pin);
+  GpioDriver_init(&gpioDriverSpiCs, SPI_CS_GPIO_Port, SPI_CS_Pin);
 
   MotorDriver_init(&motorDriver, &pwmDriver, &gpioDriverEn, &gpioDriverDir);
+
+  As5048aDriver_init(&as5048aDriver, &hspi1, gpioDriverSpiCs);
 
   MotorController_init(&motorController, &motorDriver, 10, 2);
 }
@@ -116,11 +127,14 @@ int main(void) {
   MX_TIM1_Init();
   MX_USART1_UART_Init();
   MX_TIM2_Init();
+  MX_SPI1_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
   //开启usart1中断
   HAL_UART_Receive_IT(&huart1, rx_buffer, 1);
 
+//  HAL_SPI_Receive_IT(&hspi1, spi_buffer, 1);
   //开启定时器2中断
   HAL_TIM_Base_Start_IT(&htim2);
   init_all();
@@ -140,23 +154,32 @@ int main(void) {
       ComProtocolParser_parse(&comProtocolParser);
       if (comProtocolParser.motor_cmd_ready_flag == true) {
         comProtocolParser.motor_cmd_ready_flag = false;
-        MotorCmdMsg motor_cmd = comProtocolParser.motor_cmd;
-        MotorState motor_state;
-        motor_state.mode = motor_cmd.mode;
-        motor_state.value = (double) motor_cmd.value / MOTOR_CMD_MSG_FLOAT_TO_INT;
-        MotorController_set_target(&motorController, motor_state);
+        MotorCmdMsg motor_cmd_msg = comProtocolParser.motor_cmd_msg;
+        MotorCmd motor_cmd;
+        motor_cmd.mode = motor_cmd_msg.mode;
+        motor_cmd.value = (double) motor_cmd_msg.value / MOTOR_CMD_MSG_FLOAT_TO_INT;
+        MotorController_set_cmd(&motorController, motor_cmd);
       }
     }
 
+    if (interrupt_flag_10Hz) {
+      interrupt_flag_10Hz = false;
+
+      double pos = As5048aDriver_read_data(&as5048aDriver);
+      MotorController_set_position(&motorController, pos);
+    }
 
     // 周期发送
     if (tx_send_flag == true) {
       tx_send_flag = false;
 
-      uint8_t buffer[MAX_PACKET_LENGTH + 7];
-      size_t it = 0;
-      protocol_dump(0, motorController.cur_motor_state, buffer, MAX_PACKET_LENGTH + 7, &it);
-      HAL_UART_Transmit_IT(&huart1, buffer, it);
+      //printf("cur_pos:%lf \n", As5048aDriver_read_data(&as5048aDriver));
+//      uint8_t buffer[MAX_PACKET_LENGTH + 7];
+//      size_t it = 0;
+//      protocol_dump(0, motorController.cur_motor_state, buffer, MAX_PACKET_LENGTH + 7, &it);
+////      HAL_UART_Transmit_IT(&huart1, buffer, it);
+//
+//      printf("%lf \n", As5048aDriver_read_data(&as5048aDriver));
     }
 
 
@@ -211,12 +234,11 @@ void SystemClock_Config(void) {
  * @param htim
  */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-  // 电机周期控制
+  // 10Hz
   if (htim == (&htim2)) {
-    printf("hi1\n");
+    interrupt_flag_10Hz = true;
     motor_control_flag = true;
     tx_send_flag = true;
-
   }
 }
 

@@ -17,15 +17,20 @@
 //} MotorState;
 
 typedef enum MotorMode {
-  VELOCITY,
-  POSITION,
-  CURRENT
+  MOTOR_MODE_VELOCITY = 0,
+  MOTOR_MODE_POSITION,
+  MOTOR_MODE_CURRENT
 } MotorMode;
 
 typedef struct MotorState {
+  double velocity;
+  double position;
+} MotorState;
+
+typedef struct MotorCmd {
   MotorMode mode;
   double value;
-} MotorState;
+} MotorCmd;
 
 typedef struct MotorController {
   MotorDriver *motor_driver;
@@ -35,12 +40,14 @@ typedef struct MotorController {
   // 认为cur_motor_state就是当前的状态，motor_driver设置后进瞬间达到
   MotorState cur_motor_state;
 
-  // 上位机给给的目标状态，可能需要几个控制周期后才能达到
-  MotorState tar_motor_state;
+  MotorCmd tar_motor_cmd;
 
   double max_acc;//转每秒方
 
   int control_rate;//Hz
+
+  double pos_pid_last_err;
+  double pos_pid_integral;
 } MotorController;
 
 /**
@@ -54,8 +61,11 @@ void MotorController_init(MotorController *motor_controller,
                           int control_rate,
                           double max_acc);
 
-void MotorController_set_target(MotorController *motor_controller, MotorState motor_state);
+void MotorController_set_cmd(MotorController *motor_controller, MotorCmd motor_cmd);
 
+void MotorController_set_velocity(MotorController *motor_controller, double velocity);
+
+void MotorController_set_position(MotorController *motor_controller, double position);
 /**
  * @brief 周期调用，以控制电机
  * @param motor_controller
